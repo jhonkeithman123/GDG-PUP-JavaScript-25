@@ -1,286 +1,282 @@
-/**
- * GDG Pomodoro Timer
- * A simple, beginner-friendly JavaScript application for managing focus sessions.
- * 
- * Concepts covered:
- * - Variables & Constants
- * - DOM Manipulation (finding & changing elements)
- * - Event Listeners (clicks, inputs)
- * - Functions & Logic
- * - setInterval for timing
- */
-
 // ==========================================
-// 1. CONFIGURATION & STATE
-// Variables that store data for our app
+// 1. VARIABLES & CONFIGURATION
 // ==========================================
 
-const DURATIONS = {
-  focus: 25 * 60,         // 25 minutes in seconds
-  "short-break": 5 * 60,  // 5 minutes
-  "long-break": 15 * 60,  // 15 minutes
-};
+// Time durations in seconds
+const FOCUS_TIME = 25 * 60;
+const SHORT_BREAK_TIME = 5 * 60;
+const LONG_BREAK_TIME = 15 * 60;
 
-const THEMES = {
-  focus: "var(--google-blue)",
-  "short-break": "var(--google-green)",
-  "long-break": "var(--google-yellow)",
-};
+// Colors
+const COLOR_BLUE = "var(--google-blue)";
+const COLOR_GREEN = "var(--google-green)";
+const COLOR_YELLOW = "var(--google-yellow)";
 
-// Application State (The "memory" of our app)
-let state = {
-  mode: "focus",           // Current mode: 'focus', 'short-break', or 'long-break'
-  timeLeft: DURATIONS.focus, // Time remaining in seconds
-  isRunning: false,        // Is the timer currently counting down?
-  timerInterval: null,     // Holds the ID of our active interval (so we can stop it)
-  // tasks: [],            // Array to store our list of tasks (Commented out for workshop simplicity)
-};
+// State variables (Global)
+let timeLeft = FOCUS_TIME;
+let isRunning = false;
+let currentMode = "focus"; // 'focus', 'short-break', 'long-break'
+let timerInterval = null;
+let tasks = []; // List of tasks
 
 // ==========================================
-// 2. DOM ELEMENTS
-// We select elements from the HTML page so we can control them
+// 2. DOM ELEMENTS (Selecting by ID)
 // ==========================================
 
-const elements = {
-  // Timer Display
-  timerDisplay: document.getElementById("timer-display"),
-  timerLabel: document.getElementById("timer-label"),
-  ringProgress: document.getElementById("ring-progress"),
-  
-  // Buttons & Controls
-  toggleBtn: document.getElementById("toggle-btn"),
-  toggleIcon: document.getElementById("toggle-icon"),
-  resetBtn: document.getElementById("reset-btn"),
-  modeButtons: document.querySelectorAll("[data-mode]"),
-  
-  modeButtons: document.querySelectorAll("[data-mode]"),
-  
-  /* 
-  // Tasks (Commented out)
-  taskList: document.getElementById("task-list"),
-  taskInput: document.getElementById("new-task-title"),
-  addTaskBtn: document.getElementById("add-task-btn"),
-  taskCount: document.getElementById("task-count-num"), 
-  */
-};
+const timerDisplay = document.getElementById("timer-display");
+const timerLabel = document.getElementById("timer-label");
+const ringProgress = document.getElementById("ring-progress");
+
+// Buttons
+const startBtn = document.getElementById("toggle-btn");
+const resetBtn = document.getElementById("reset-btn");
+const toggleIcon = document.getElementById("toggle-icon");
+
+// Mode Buttons
+const focusBtn = document.getElementById("focus-btn");
+const shortBreakBtn = document.getElementById("short-break-btn");
+const longBreakBtn = document.getElementById("long-break-btn");
+
+// Task Elements
+const taskList = document.getElementById("task-list");
+const taskInput = document.getElementById("new-task-title");
+const addTaskBtn = document.getElementById("add-task-btn");
+const taskCountNum = document.getElementById("task-count-num");
 
 // ==========================================
-// 3. CORE FUNCTIONS 
-// The logic that makes the app work
+// 3. TIMER FUNCTIONS
 // ==========================================
 
-/**
- * Updates the screen to show the current state.
- * This is called whenever data changes.
- */
-function updateUI() {
-  // 1. Update the time display (e.g., "25:00")
-  const minutes = Math.floor(state.timeLeft / 60);
-  const seconds = state.timeLeft % 60;
-  // PadStart ensures we see "05" instead of just "5"
-  elements.timerDisplay.textContent = `${minutes}:${seconds.toString().padStart(2, "0")}`;
-  
-  // 2. Update the progress ring circle
-  const totalTime = DURATIONS[state.mode];
-  const progress = 1 - (state.timeLeft / totalTime);
-  elements.ringProgress.style.strokeDashoffset = progress; // logic in CSS handles the drawing
+function updateTimerDisplay() {
+  // Calculate minutes and seconds
+  const minutes = Math.floor(timeLeft / 60);
+  const seconds = timeLeft % 60;
 
-  // 3. Update the play/pause icon
-  elements.toggleIcon.textContent = state.isRunning ? "pause" : "play_arrow";
+  // Format as "MM:SS" (e.g., "05:09")
+  const formattedTime =
+    minutes.toString().padStart(2, "0") +
+    ":" +
+    seconds.toString().padStart(2, "0");
 
-  // 4. Highlight the correct mode button
-  elements.modeButtons.forEach(btn => {
-    const btnMode = btn.dataset.mode;
-    if (btnMode === state.mode) {
-      btn.classList.add("active");
-    } else {
-      btn.classList.remove("active");
-    }
-  });
+  timerDisplay.textContent = formattedTime;
 
-  /* 
-  // 5. Update Task Counts (Commented out)
-  const completedTasks = state.tasks.filter(t => t.isDone).length;
-  elements.taskCount.textContent = completedTasks;
-  */
+  // Update the ring progress
+  let totalTime = FOCUS_TIME;
+  if (currentMode === "short-break") totalTime = SHORT_BREAK_TIME;
+  if (currentMode === "long-break") totalTime = LONG_BREAK_TIME;
 
-  // 6. Update Color Theme
-  const root = document.documentElement;
-  root.style.setProperty("--theme-primary", THEMES[state.mode]);
-  
-  // 6. Update Timer Label
-  if (state.mode === 'focus') {
-    elements.timerLabel.textContent = state.isRunning ? "Go go go!" : "Ready to focus?";
+  const progress = 1 - timeLeft / totalTime;
+  ringProgress.style.strokeDashoffset = progress;
+}
+
+function startTimer() {
+  if (isRunning) {
+    // If already running, pause it
+    clearInterval(timerInterval);
+    isRunning = false;
+    toggleIcon.textContent = "play_arrow";
+    timerLabel.textContent = "Paused";
+    console.log("Timer Paused");
   } else {
-    elements.timerLabel.textContent = "Take a breather";
-  }
-}
+    // Start the timer
+    isRunning = true;
+    toggleIcon.textContent = "pause";
+    timerLabel.textContent =
+      currentMode === "focus" ? "Stay focused" : "Take a break";
 
-/**
- * Switches the timer mode (Focus, Short Break, Long Break)
- */
-function switchMode(newMode) {
-  state.mode = newMode;
-  state.timeLeft = DURATIONS[newMode];
-  state.isRunning = false;
-  
-  // Stop the timer if it was running
-  if (state.timerInterval) {
-    clearInterval(state.timerInterval);
-    state.timerInterval = null;
-  }
-  
-  updateUI();
-}
-
-/**
- * Starts or Pauses the timer
- */
-function toggleTimer() {
-  // If running, stop it
-  if (state.isRunning) {
-    state.isRunning = false;
-    clearInterval(state.timerInterval);
-    state.timerInterval = null;
-  } 
-  // If stopped, start it
-  else {
-    state.isRunning = true;
-    
-    // Create an interval that runs every 1 second (1000ms)
-    state.timerInterval = setInterval(() => {
-      if (state.timeLeft > 0) {
-        state.timeLeft--;
-        updateUI();
+    timerInterval = setInterval(() => {
+      if (timeLeft > 0) {
+        timeLeft = timeLeft - 1;
+        console.log("Timer Running");
+        updateTimerDisplay();
       } else {
-        // Time is up!
+        // Timer finished
+        clearInterval(timerInterval);
+        isRunning = false;
+        toggleIcon.textContent = "play_arrow";
         alert("Time is up!");
-        state.isRunning = false;
-        clearInterval(state.timerInterval);
-        switchMode(state.mode === 'focus' ? 'short-break' : 'focus'); // Simple auto-switch
+        console.log("TImer Finished");
       }
     }, 1000);
   }
-  
-  updateUI();
 }
 
-/**
- * Resets the current timer to the beginning
- */
 function resetTimer() {
-  state.isRunning = false;
-  clearInterval(state.timerInterval);
-  state.timerInterval = null;
-  state.timeLeft = DURATIONS[state.mode];
-  updateUI();
+  clearInterval(timerInterval);
+  isRunning = false;
+  toggleIcon.textContent = "play_arrow";
+  console.log("Timer Reset");
+  // Reset time based on current mode
+  if (currentMode === "focus") timeLeft = FOCUS_TIME;
+  else if (currentMode === "short-break") timeLeft = SHORT_BREAK_TIME;
+  else if (currentMode === "long-break") timeLeft = LONG_BREAK_TIME;
+
+  updateTimerDisplay();
 }
 
-/* 
-// ==========================================
-// 4. TASK MANAGEMENT
-// Handling the todo list (Commented out for simplified workshop)
-// ==========================================
+function setMode(mode) {
+  currentMode = mode;
 
-function addTask() {
-  const text = elements.taskInput.value.trim();
-  if (text === "") return; // Don't add empty tasks
+  // Update buttons style
+  focusBtn.classList.remove("active");
+  shortBreakBtn.classList.remove("active");
+  longBreakBtn.classList.remove("active");
 
-  const newTask = {
-    id: Date.now(), // simple unique ID
-    text: text,
-    isDone: false
-  };
+  const root = document.documentElement;
+  console.log(root);
 
-  state.tasks.push(newTask);
-  elements.taskInput.value = ""; // Clear input
-  renderTasks();
-  updateUI();
-}
-
-function toggleTask(id) {
-  // Find the task and flip its isDone status
-  const task = state.tasks.find(t => t.id === id);
-  if (task) {
-    task.isDone = !task.isDone;
-    renderTasks();
-    updateUI();
+  if (mode === "focus") {
+    timeLeft = FOCUS_TIME;
+    focusBtn.classList.add("active");
+    root.style.setProperty("--theme-primary", COLOR_BLUE);
+    timerLabel.textContent = "Ready to focus?";
+    console.log("Focus Mode");
+  } else if (mode === "short-break") {
+    timeLeft = SHORT_BREAK_TIME;
+    shortBreakBtn.classList.add("active");
+    root.style.setProperty("--theme-primary", COLOR_GREEN);
+    timerLabel.textContent = "Time for a break";
+    console.log("Short Break Mode");
+  } else if (mode === "long-break") {
+    timeLeft = LONG_BREAK_TIME;
+    longBreakBtn.classList.add("active");
+    root.style.setProperty("--theme-primary", COLOR_YELLOW);
+    timerLabel.textContent = "Time for a long break";
+    console.log("Long Break Mode");
   }
+
+  // Stop timer when switching modes
+  clearInterval(timerInterval);
+  isRunning = false;
+  toggleIcon.textContent = "play_arrow";
+  console.log("Timer Reset");
+
+  updateTimerDisplay();
 }
 
-function deleteTask(id) {
-  // Keep only tasks that do NOT match the ID
-  state.tasks = state.tasks.filter(t => t.id !== id);
-  renderTasks();
-  updateUI();
-}
+// ==========================================
+// 4. TASK FUNCTIONS
+// ==========================================
 
-/**
- * Renders the list of tasks into the HTML
- */
-/**
 function renderTasks() {
-  elements.taskList.innerHTML = ""; // Clear current list
+  // Clear the list
+  taskList.innerHTML = "";
 
-  if (state.tasks.length === 0) {
-    elements.taskList.innerHTML = '<li class="empty-state">No active tasks</li>';
+  // Update count
+  const completedCount = tasks.filter((t) => t.isDone).length;
+  taskCountNum.textContent = completedCount + " / " + tasks.length;
+
+  if (tasks.length === 0) {
+    taskList.innerHTML = '<li class="empty-state">No active tasks</li>';
     return;
   }
 
-  state.tasks.forEach(task => {
-    // Create List Item
+  // Loop through tasks and create HTML
+  for (let i = 0; i < tasks.length; i++) {
+    const task = tasks[i];
+
     const li = document.createElement("li");
-    li.className = `task-item ${task.isDone ? "completed" : ""}`;
-    
-    // HTML for the task
+    li.className = "task-item";
+    if (task.isDone) {
+      li.classList.add("completed");
+    }
+
     li.innerHTML = `
       <div class="task-content">
-        <button class="btn-check" onclick="window.app.toggleTask(${task.id})">
-          <span class="material-symbols-rounded">${task.isDone ? "check_circle" : "radio_button_unchecked"}</span>
+        <button class="btn-check">
+          <span class="material-symbols-rounded">${
+            task.isDone ? "check_circle" : "radio_button_unchecked"
+          }</span>
         </button>
-        <span class="task-title">${task.text}</span>
+        <div class="task-title">${task.title}</div>
       </div>
-      <button class="btn-delete" onclick="window.app.deleteTask(${task.id})">
-        <span class="material-symbols-rounded">delete</span>
-      </button>
+      <div class="task-actions">
+        <button class="btn-edit">
+          <span class="material-symbols-rounded">edit</span>
+        </button>
+        <button class="btn-delete">
+          <span class="material-symbols-rounded">delete</span>
+        </button>
+      </div>
     `;
 
-    elements.taskList.appendChild(li);
-  });
+    // Add Event Listeners to the buttons inside this task
+    const checkBtn = li.querySelector(".btn-check");
+    checkBtn.addEventListener("click", () => {
+      task.isDone = !task.isDone;
+      renderTasks();
+      console.log("Task checked");
+    });
+
+    const editBtn = li.querySelector(".btn-edit");
+    editBtn.addEventListener("click", () => {
+      const newTitle = prompt("Edit task title:", task.title);
+      if (newTitle) {
+        task.title = newTitle;
+        renderTasks();
+        console.log("Task edited");
+      }
+    });
+
+    const deleteBtn = li.querySelector(".btn-delete");
+    deleteBtn.addEventListener("click", () => {
+      tasks.splice(i, 1); // Remove task at index i
+      renderTasks();
+      console.log("Task deleted");
+    });
+
+    taskList.appendChild(li);
+  }
 }
-*/
+
+function addTask() {
+  const title = taskInput.value;
+  if (title === "") {
+    alert("Please enter a task title");
+    return;
+  }
+
+  const newTask = {
+    title: title,
+    isDone: false,
+  };
+
+  tasks.push(newTask);
+  taskInput.value = "";
+  console.log("Task added");
+  renderTasks();
+}
 
 // ==========================================
-// 5. INITIALIZATION & EVENTS
-// Connecting everything together
+// 5. EVENT LISTENERS
 // ==========================================
 
-// Add click events to buttons
-elements.toggleBtn.addEventListener("click", toggleTimer);
-elements.resetBtn.addEventListener("click", resetTimer);
-/* 
-// Task Event Listeners (Commented out)
-elements.addTaskBtn.addEventListener("click", addTask);
-elements.taskInput.addEventListener("keypress", (e) => {
-  if (e.key === "Enter") addTask();
-});
-*/
+startBtn.addEventListener("click", startTimer);
+resetBtn.addEventListener("click", resetTimer);
 
-// Mode switching buttons
-elements.modeButtons.forEach(btn => {
-  btn.addEventListener("click", () => {
-    switchMode(btn.dataset.mode);
-  });
+focusBtn.addEventListener("click", () => {
+  setMode("focus");
+  console.log("Focus mode activated");
 });
 
-/*
-// Expose functions to window (Commented out)
-window.app = {
-  toggleTask,
-  deleteTask
-};
-*/
+shortBreakBtn.addEventListener("click", () => {
+  setMode("short-break");
+  console.log("Short break mode activated");
+});
 
-// Start the app!
-updateUI();
-// renderTasks(); // (Commented out)
+longBreakBtn.addEventListener("click", () => {
+  setMode("long-break");
+  console.log("Long break mode activated");
+});
+
+addTaskBtn.addEventListener("click", addTask);
+
+taskInput.addEventListener("keypress", (event) => {
+  if (event.key === "Enter") {
+    addTask();
+  }
+});
+
+// Initialize
+updateTimerDisplay();
+renderTasks();
